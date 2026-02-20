@@ -10,7 +10,10 @@
  */
 #pragma once
 
-#include "dmx/include/types.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "../../include/types.h"
 #include "hal/uart_hal.h"
 
 #ifdef __cplusplus

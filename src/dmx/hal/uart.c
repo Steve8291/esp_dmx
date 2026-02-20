@@ -7,6 +7,8 @@
 #include "rdm/include/driver.h"
 #include "rdm/include/uid.h"
 
+#include "soc/periph_defs.h"
+
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "esp_private/esp_clk.h"
 #include "esp_private/periph_ctrl.h"
@@ -21,6 +23,36 @@
 
 #define DMX_UART_FULL_DEFAULT 1
 #define DMX_UART_EMPTY_DEFAULT 8
+
+static inline periph_module_t dmx_uart_get_periph_module(dmx_port_t dmx_num) {
+#if CONFIG_IDF_TARGET_ESP32C6
+  // UART2 on ESP32-C6 is a LP UART.
+  if (dmx_num == 2) return PERIPH_LP_UART0_MODULE;
+#endif
+
+  switch (dmx_num) {
+    case 0:
+      return PERIPH_UART0_MODULE;
+    case 1:
+      return PERIPH_UART1_MODULE;
+#if SOC_UART_NUM > 2
+#if !CONFIG_IDF_TARGET_ESP32C6
+    case 2:
+      return PERIPH_UART2_MODULE;
+#endif
+#endif
+#if SOC_UART_NUM > 3
+    case 3:
+      return PERIPH_UART3_MODULE;
+#endif
+#if SOC_UART_NUM > 4
+    case 4:
+      return PERIPH_UART4_MODULE;
+#endif
+    default:
+      return PERIPH_MODULE_MAX;
+  }
+}
 
 static struct dmx_uart_t {
   const int num;
@@ -327,15 +359,17 @@ static void DMX_ISR_ATTR dmx_uart_isr(void *arg) {
 bool dmx_uart_init(dmx_port_t dmx_num, void *isr_context, int isr_flags) {
   struct dmx_uart_t *uart = &dmx_uart_context[dmx_num];
 
-  periph_module_enable(uart_periph_signal[dmx_num].module);
+  const periph_module_t module = dmx_uart_get_periph_module(dmx_num);
+
+  periph_module_enable(module);
   if (dmx_num != 0) {  // Default UART port for console
 #if SOC_UART_REQUIRE_CORE_RESET
     // ESP32C3 workaround to prevent UART outputting garbage data
     uart_ll_set_reset_core(uart->dev, true);
-    periph_module_reset(uart_periph_signal[dmx_num].module);
+    periph_module_reset(module);
     uart_ll_set_reset_core(uart->dev, false);
 #else
-    periph_module_reset(uart_periph_signal[dmx_num].module);
+    periph_module_reset(module);
 #endif
   }
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
@@ -381,7 +415,7 @@ bool dmx_uart_init(dmx_port_t dmx_num, void *isr_context, int isr_flags) {
 void dmx_uart_deinit(dmx_port_t dmx_num) {
   struct dmx_uart_t *uart = &dmx_uart_context[dmx_num];
   if (uart->num != 0) {  // Default UART port for console
-    periph_module_disable(uart_periph_signal[uart->num].module);
+    periph_module_disable(dmx_uart_get_periph_module(uart->num));
   }
 }
 
